@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Plus, Edit2, Trash2, Settings, FolderPlus, ArrowLeft, Check, AlertTriangle, X, Package, Calendar, FileText, DollarSign } from "lucide-react";
-import { adminCreateProduct, adminUpdateProduct, adminDeleteProduct, adminFetchAllOrders, adminUpdateOrderStatus } from "../services/admin.service";
+import { adminCreateProduct, adminUpdateProduct, adminDeleteProduct, adminFetchAllOrders, adminUpdateOrderStatus, adminUploadProductImage } from "../services/admin.service";
 
 export default function Admin({ user, products, onRefreshProducts }) {
   const [formOpen, setFormOpen] = useState(false);
@@ -24,6 +24,42 @@ export default function Admin({ user, products, onRefreshProducts }) {
   const [care, setCare] = useState("");
 
   const [errorMsg, setErrorMsg] = useState("");
+
+  const [imageUploading, setImageUploading] = useState(false);
+  const [hoverImageUploading, setHoverImageUploading] = useState(false);
+
+  const handleImageFileChange = async (e, fieldType) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      showToast("File size should not exceed 5MB", "error");
+      return;
+    }
+
+    try {
+      if (fieldType === "image") {
+        setImageUploading(true);
+        const data = await adminUploadProductImage(file, user.token);
+        setImage(data.secure_url);
+        showToast("Product image uploaded successfully!");
+      } else {
+        setHoverImageUploading(true);
+        const data = await adminUploadProductImage(file, user.token);
+        setHoverImage(data.secure_url);
+        showToast("Hover image uploaded successfully!");
+      }
+    } catch (err) {
+      console.error(err);
+      showToast(err.message || "Failed to upload image.", "error");
+    } finally {
+      if (fieldType === "image") {
+        setImageUploading(false);
+      } else {
+        setHoverImageUploading(false);
+      }
+    }
+  };
 
   // Toast & custom confirmation state
   const [toasts, setToasts] = useState([]);
@@ -619,7 +655,19 @@ export default function Admin({ user, products, onRefreshProducts }) {
                     required
                     value={image}
                     onChange={(e) => setImage(e.target.value)}
-                    className="w-full bg-white border border-sand-300 px-3 py-2 text-sm focus:outline-none focus:border-sand-700 transition-colors"
+                    className="w-full bg-white border border-sand-300 px-3 py-2 text-sm focus:outline-none focus:border-sand-700 transition-colors mb-1.5"
+                    placeholder="https://..."
+                  />
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] text-neutral-500 uppercase">Or upload local image:</span>
+                    {imageUploading && <span className="text-[10px] text-sand-700 animate-pulse uppercase font-semibold">Uploading...</span>}
+                  </div>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    disabled={imageUploading}
+                    onChange={(e) => handleImageFileChange(e, "image")}
+                    className="w-full text-xs text-neutral-500 file:mr-3 file:py-1.5 file:px-3 file:border file:border-sand-300 file:text-[10px] file:uppercase file:tracking-wider file:font-bold file:bg-white file:text-neutral-800 hover:file:bg-neutral-50 cursor-pointer"
                   />
                 </div>
 
@@ -629,8 +677,19 @@ export default function Admin({ user, products, onRefreshProducts }) {
                     type="url"
                     value={hoverImage}
                     onChange={(e) => setHoverImage(e.target.value)}
-                    placeholder="Optional hover alternate"
-                    className="w-full bg-white border border-sand-300 px-3 py-2 text-sm focus:outline-none focus:border-sand-700 transition-colors"
+                    className="w-full bg-white border border-sand-300 px-3 py-2 text-sm focus:outline-none focus:border-sand-700 transition-colors mb-1.5"
+                    placeholder="https://..."
+                  />
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] text-neutral-500 uppercase">Or upload hover image:</span>
+                    {hoverImageUploading && <span className="text-[10px] text-sand-700 animate-pulse uppercase font-semibold">Uploading...</span>}
+                  </div>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    disabled={hoverImageUploading}
+                    onChange={(e) => handleImageFileChange(e, "hoverImage")}
+                    className="w-full text-xs text-neutral-500 file:mr-3 file:py-1.5 file:px-3 file:border file:border-sand-300 file:text-[10px] file:uppercase file:tracking-wider file:font-bold file:bg-white file:text-neutral-800 hover:file:bg-neutral-50 cursor-pointer"
                   />
                 </div>
               </div>

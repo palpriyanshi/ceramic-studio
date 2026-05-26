@@ -65,3 +65,20 @@ export async function adminUpdateOrderStatus(orderId, status, token, reason) {
   return data;
 }
 
+export async function adminUploadProductImage(file, token) {
+  const formData = new FormData();
+  formData.append("image", file);
+
+  const res = await fetch(`${API_BASE_URL}/admin/products/upload`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: formData,
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || "Failed to upload image");
+  return data;
+}
+
+
