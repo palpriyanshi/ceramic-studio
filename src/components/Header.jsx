@@ -10,10 +10,12 @@ export default function Header({
   searchQuery,
   setSearchQuery,
   user,
-  onLoginToggle
+  onLoginToggle,
+  onLogout
 }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
 
   const navItems = [
     { label: "Home", view: "home" },
@@ -101,18 +103,79 @@ export default function Header({
 
           {/* Right: Cart, Account */}
           <div className="flex items-center space-x-2 md:space-x-6">
-            {/* Account (Log In) */}
-            <button
-              onClick={onLoginToggle}
-              className="flex items-center space-x-1 text-sm font-sans tracking-widest text-neutral-600 hover:text-neutral-900 transition-colors uppercase cursor-pointer"
-            >
-              <div className="w-8 h-8 rounded-full border border-neutral-300 flex items-center justify-center bg-sand-200">
-                <User className="h-4 w-4 text-neutral-700" />
-              </div>
-              <span className="hidden sm:inline text-xs ml-1">
-                {user ? `Hi, ${user.name}` : "Log In"}
-              </span>
-            </button>
+            {/* Account (Log In / Dropdown) */}
+            <div className="relative">
+              <button
+                onClick={() => {
+                  if (user) {
+                    setDropdownOpen(!dropdownOpen);
+                  } else {
+                    onLoginToggle();
+                  }
+                }}
+                className="flex items-center space-x-1 text-sm font-sans tracking-widest text-neutral-600 hover:text-neutral-900 transition-colors uppercase cursor-pointer focus:outline-none"
+              >
+                <div className="w-8 h-8 rounded-full border border-neutral-300 flex items-center justify-center bg-sand-200 overflow-hidden">
+                  {user && user.profileImage ? (
+                    <img src={user.profileImage} alt={user.name} className="w-full h-full object-cover" />
+                  ) : (
+                    <User className="h-4 w-4 text-neutral-700" />
+                  )}
+                </div>
+                <span className="hidden sm:inline text-xs ml-1 font-semibold">
+                  {user ? `Hi, ${user.name.split(" ")[0]}` : "Log In"}
+                </span>
+              </button>
+
+              {user && dropdownOpen && (
+                <>
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setDropdownOpen(false)}
+                  />
+                  <div className="absolute right-0 mt-3 w-48 bg-sand-100 border border-sand-300 shadow-xl z-50 animate-scale-up py-2 flex flex-col">
+                    <button
+                      onClick={() => {
+                        handleNavClick("profile");
+                        setDropdownOpen(false);
+                      }}
+                      className="w-full text-left px-4 py-2.5 text-xs tracking-wider uppercase hover:bg-sand-200 text-neutral-800 transition-colors font-sans font-semibold cursor-pointer"
+                    >
+                      My Profile
+                    </button>
+                    <button
+                      onClick={() => {
+                        handleNavClick("orders");
+                        setDropdownOpen(false);
+                      }}
+                      className="w-full text-left px-4 py-2.5 text-xs tracking-wider uppercase hover:bg-sand-200 text-neutral-800 transition-colors font-sans font-semibold cursor-pointer"
+                    >
+                      My Orders
+                    </button>
+                    {user.role === "admin" && (
+                      <button
+                        onClick={() => {
+                          handleNavClick("admin");
+                          setDropdownOpen(false);
+                        }}
+                        className="w-full text-left px-4 py-2.5 text-xs tracking-wider uppercase hover:bg-sand-200 text-sand-700 transition-colors font-sans font-bold cursor-pointer border-t border-sand-200"
+                      >
+                        Admin Panel
+                      </button>
+                    )}
+                    <button
+                      onClick={() => {
+                        onLogout();
+                        setDropdownOpen(false);
+                      }}
+                      className="w-full text-left px-4 py-2.5 text-xs tracking-wider uppercase hover:bg-red-50 text-red-700 transition-colors font-sans font-semibold cursor-pointer border-t border-sand-200"
+                    >
+                      Log Out
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
 
             {/* Cart Icon */}
             <button

@@ -4,6 +4,7 @@ import Footer from "./components/Footer";
 import SocialBar from "./components/SocialBar";
 import CartDrawer from "./components/CartDrawer";
 import ProductModal from "./components/ProductModal";
+import AuthModal from "./components/AuthModal";
 
 // Views
 import Home from "./pages/Home";
@@ -11,10 +12,13 @@ import Shop from "./pages/Shop";
 import About from "./pages/About";
 import GiftCard from "./pages/GiftCard";
 import Contact from "./pages/Contact";
+import Profile from "./pages/Profile";
+import Orders from "./pages/Orders";
+import Admin from "./pages/Admin";
 
-// Data
-import { products, categories } from "./data/productsData";
-import { User, LogIn, Mail, Lock, X } from "lucide-react";
+// Services
+import { fetchProducts, fetchCategories } from "./services/product.service";
+import { loginUser, registerUser, fetchUserProfile } from "./services/auth.service";
 
 export default function App() {
   const [activeView, setActiveView] = useState("home");
@@ -23,11 +27,68 @@ export default function App() {
   const [activeProduct, setActiveProduct] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   
-  // Login modal and state
+  // Products and categories loaded from backend
+  const [products, setProducts] = useState([]);
+  const [categories, setCategories] = useState(["All Products"]);
+
+  // Authentication state
   const [loginOpen, setLoginOpen] = useState(false);
+  const [authMode, setAuthMode] = useState("login"); // 'login' | 'signup'
   const [user, setUser] = useState(null);
+  
+  // Login form state
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
+
+  // Signup form state
+  const [signupName, setSignupName] = useState("");
+  const [signupEmail, setSignupEmail] = useState("");
+  const [signupPassword, setSignupPassword] = useState("");
+
+  const loadProducts = async () => {
+    try {
+      const prodData = await fetchProducts(100);
+      setProducts(prodData);
+    } catch (err) {
+      console.error("Failed to fetch products:", err);
+    }
+  };
+
+  // Restore session and fetch initial products/categories
+  useEffect(() => {
+    const savedToken = localStorage.getItem("ceramic_token");
+    if (savedToken) {
+      const restoreSession = async () => {
+        try {
+          const data = await fetchUserProfile(savedToken);
+          setUser({
+            id: data._id,
+            name: data.name,
+            email: data.email,
+            role: data.role,
+            profileImage: data.profileImage,
+            token: savedToken,
+          });
+        } catch (err) {
+          console.error("Failed to restore session:", err);
+          localStorage.removeItem("ceramic_token");
+        }
+      };
+      restoreSession();
+    }
+
+    const loadCategories = async () => {
+      try {
+        const catData = await fetchCategories();
+        setCategories(["All Products", ...catData]);
+      } catch (err) {
+        console.error("Failed to fetch categories:", err);
+      }
+    };
+
+    loadProducts();
+    loadCategories();
+  }, []);
 
   // Scroll to top on view changes
   useEffect(() => {
@@ -78,25 +139,97 @@ export default function App() {
 
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
-  // Mock login handling
-  const handleLoginSubmit = (e) => {
+  // Authenticate with the backend
+  const handleLoginSubmit = async (e) => {
     e.preventDefault();
     if (!loginEmail || !loginPassword) {
       alert("Please fill in both email and password.");
       return;
     }
-    // Mock user session
-    setUser({
-      name: loginEmail.split("@")[0],
-      email: loginEmail
-    });
-    setLoginOpen(false);
-    setLoginEmail("");
-    setLoginPassword("");
+
+    try {
+      const data = await loginUser(loginEmail, loginPassword);
+      setUser({
+        id: data._id,
+        name: data.name,
+        email: data.email,
+        role: data.role,
+        profileImage: data.profileImage,
+        token: data.token,
+      });
+      localStorage.setItem("ceramic_token", data.token);
+
+      setLoginOpen(false);
+      setLoginEmail("");
+      setLoginPassword("");
+    } catch (err) {
+      console.error(err);
+      alert(err.message || "Invalid email or password.");
+    }
+  };
+
+  // Register with the backend
+  const handleSignupSubmit = async (e) => {
+    e.preventDefault();
+    if (!signupName || !signupEmail || !signupPassword) {
+      alert("Please fill in all fields.");
+      return;
+    }
+
+    try {
+      const data = await registerUser(signupName, signupEmail, signupPassword);
+      setUser({
+        id: data._id,
+        name: data.name,
+        email: data.email,
+        role: data.role,
+        profileImage: data.profileImage,
+        token: data.token,
+      });
+      localStorage.setItem("ceramic_token", data.token);
+
+      setLoginOpen(false);
+      setSignupName("");
+      setSignupEmail("");
+      setSignupPassword("");
+      alert(`Welcome, ${data.name}! Account created successfully.`);
+    } catch (err) {
+      console.error(err);
+      alert(err.message || "Registration failed.");
+    }
+  };
+
+  // Quick guest bypass via the seeded database user
+  const handleQuickGuestBypass = async () => {
+    try {
+      const data = await loginUser("member@ceramic.studio", "password123");
+      setUser({
+        id: data._id,
+        name: data.name,
+        email: data.email,
+        role: data.role,
+        profileImage: data.profileImage,
+        token: data.token,
+      });
+      localStorage.setItem("ceramic_token", data.token);
+      setLoginOpen(false);
+    } catch (err) {
+      console.error("Guest bypass login failed, falling back to mock session:", err);
+      setUser({
+        name: "Studio Member",
+        email: "member@ceramic.studio",
+        role: "user",
+        profileImage: "",
+        token: "mock-token",
+      });
+      setLoginOpen(false);
+    }
   };
 
   const handleLogout = () => {
     setUser(null);
+    localStorage.removeItem("ceramic_token");
+    setActiveView("home"); // Redirect to home upon logout
     alert("You have logged out successfully.");
   };
 
@@ -113,12 +246,10 @@ export default function App() {
         setSearchQuery={setSearchQuery}
         user={user}
         onLoginToggle={() => {
-          if (user) {
-            if (window.confirm("Do you want to log out?")) handleLogout();
-          } else {
-            setLoginOpen(true);
-          }
+          setAuthMode("login");
+          setLoginOpen(true);
         }}
+        onLogout={handleLogout}
       />
 
       {/* Floating social bar */}
@@ -148,6 +279,24 @@ export default function App() {
           <GiftCard onAddCustomToCart={handleAddCustomToCart} />
         )}
         {activeView === "contact" && <Contact />}
+        {activeView === "profile" && (
+          <Profile
+            user={user}
+            onUserUpdate={setUser}
+          />
+        )}
+        {activeView === "orders" && (
+          <Orders
+            user={user}
+          />
+        )}
+        {activeView === "admin" && (
+          <Admin
+            user={user}
+            products={products}
+            onRefreshProducts={loadProducts}
+          />
+        )}
       </main>
 
       {/* Footer */}
@@ -161,6 +310,11 @@ export default function App() {
         onUpdateQuantity={handleUpdateQuantity}
         onRemoveItem={handleRemoveItem}
         onClearCart={handleClearCart}
+        user={user}
+        onLoginRequired={() => {
+          setAuthMode("login");
+          setLoginOpen(true);
+        }}
       />
 
       {/* Product Detail Overlay Modal */}
@@ -171,85 +325,26 @@ export default function App() {
         onAddToCart={handleAddToCart}
       />
 
-      {/* Mock Account Login Modal */}
-      {loginOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 font-sans">
-          <div
-            className="absolute inset-0 bg-neutral-900/60 backdrop-blur-sm"
-            onClick={() => setLoginOpen(false)}
-          />
-          <div className="relative bg-sand-100 max-w-sm w-full p-8 border border-sand-300 shadow-2xl animate-scale-up z-10 flex flex-col">
-            <button
-              onClick={() => setLoginOpen(false)}
-              className="absolute right-4 top-4 text-neutral-500 hover:text-neutral-950 transition-colors"
-            >
-              <X className="h-5 w-5" />
-            </button>
-
-            <div className="flex flex-col items-center mb-6 text-center">
-              <div className="w-12 h-12 bg-sand-200 text-neutral-700 rounded-full flex items-center justify-center border border-sand-300 mb-2">
-                <LogIn className="h-5 w-5" />
-              </div>
-              <h3 className="text-xl font-serif font-semibold text-neutral-950">
-                Log In to Your Account
-              </h3>
-              <p className="text-xs text-neutral-500 mt-1">
-                Enter details below for quick guest member access.
-              </p>
-            </div>
-
-            <form onSubmit={handleLoginSubmit} className="space-y-4">
-              <div className="space-y-1">
-                <label className="text-xs text-neutral-600 uppercase font-sans">Email Address</label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-2.5 h-4.5 w-4.5 text-neutral-400" />
-                  <input
-                    type="email"
-                    required
-                    value={loginEmail}
-                    onChange={(e) => setLoginEmail(e.target.value)}
-                    placeholder="email@example.com"
-                    className="w-full bg-white border border-sand-300 pl-10 pr-4 py-2 text-sm focus:outline-none focus:border-sand-700 transition-colors"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-xs text-neutral-600 uppercase font-sans">Password</label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-2.5 h-4.5 w-4.5 text-neutral-400" />
-                  <input
-                    type="password"
-                    required
-                    value={loginPassword}
-                    onChange={(e) => setLoginPassword(e.target.value)}
-                    placeholder="••••••••"
-                    className="w-full bg-white border border-sand-300 pl-10 pr-4 py-2 text-sm focus:outline-none focus:border-sand-700 transition-colors"
-                  />
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                className="w-full bg-neutral-950 hover:bg-neutral-850 text-white text-xs font-sans tracking-widest uppercase py-3 transition-colors cursor-pointer text-center mt-2"
-              >
-                Log In
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setUser({ name: "Studio Member", email: "member@ceramic.studio" });
-                  setLoginOpen(false);
-                }}
-                className="w-full border border-neutral-950 text-neutral-950 hover:bg-neutral-100 text-xs font-sans tracking-widest uppercase py-2 transition-colors cursor-pointer text-center"
-              >
-                Quick Guest Bypass
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
+      {/* Auth Modal (Login / Signup) */}
+      <AuthModal
+        isOpen={loginOpen}
+        onClose={() => setLoginOpen(false)}
+        authMode={authMode}
+        setAuthMode={setAuthMode}
+        loginEmail={loginEmail}
+        setLoginEmail={setLoginEmail}
+        loginPassword={loginPassword}
+        setLoginPassword={setLoginPassword}
+        handleLoginSubmit={handleLoginSubmit}
+        handleQuickGuestBypass={handleQuickGuestBypass}
+        signupName={signupName}
+        setSignupName={setSignupName}
+        signupEmail={signupEmail}
+        setSignupEmail={setSignupEmail}
+        signupPassword={signupPassword}
+        setSignupPassword={setSignupPassword}
+        handleSignupSubmit={handleSignupSubmit}
+      />
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { X, Trash2, ShoppingBag, Plus, Minus, Tag, Check } from "lucide-react";
+import { createOrder } from "../services/order.service";
 
 export default function CartDrawer({
   isOpen,
@@ -7,7 +8,9 @@ export default function CartDrawer({
   cartItems,
   onUpdateQuantity,
   onRemoveItem,
-  onClearCart
+  onClearCart,
+  user,
+  onLoginRequired
 }) {
   const [promoCode, setPromoCode] = useState("");
   const [discountApplied, setDiscountApplied] = useState(false);
@@ -41,21 +44,55 @@ export default function CartDrawer({
     }
   };
 
-  const handleCheckoutSubmit = (e) => {
+  const handleCheckoutSubmit = async (e) => {
     e.preventDefault();
     if (!shippingName || !shippingEmail || !shippingAddress) {
       alert("Please fill in all shipping details.");
       return;
     }
-    setCheckoutStep("success");
-    setTimeout(() => {
-      onClearCart();
-      setCheckoutStep("cart");
-      setDiscountApplied(false);
-      setDiscountAmount(0);
-      setPromoCode("");
-      onClose();
-    }, 5000);
+
+    if (!user || !user.token) {
+      alert("Please log in to place your order.");
+      onLoginRequired();
+      return;
+    }
+
+    try {
+      // Map cart products for the backend API
+      const itemsPayload = cartItems.map((item) => ({
+        product: item.id,
+        quantity: item.quantity,
+      }));
+
+      await createOrder({
+        items: itemsPayload,
+        shippingAddress: {
+          fullName: shippingName,
+          email: shippingEmail,
+          address: shippingAddress,
+        },
+        payment: {
+          method: "cod",
+          status: "pending",
+        },
+        paymentMethod: "cod",
+        shippingCharge: shippingCost,
+        discount: discountVal,
+      }, user.token);
+
+      setCheckoutStep("success");
+      setTimeout(() => {
+        onClearCart();
+        setCheckoutStep("cart");
+        setDiscountApplied(false);
+        setDiscountAmount(0);
+        setPromoCode("");
+        onClose();
+      }, 5000);
+    } catch (err) {
+      console.error("Order creation failed:", err);
+      alert(err.message || "Something went wrong while placing your order.");
+    }
   };
 
   if (!isOpen) return null;
